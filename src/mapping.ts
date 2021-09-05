@@ -7,6 +7,12 @@ import {
   Transfer
 } from "../generated/MonsterMaps/MonsterMaps"
 
+import {
+  MonsterMap,
+  Owner,
+  Monster,
+} from "../generated/schema"
+
 export function handleApproval(event: Approval): void {
   // Entities can be loaded from the store using a string ID; this ID
   // needs to be unique across all entities of the same type
@@ -71,65 +77,19 @@ export function handleOwnershipTransferred(event: OwnershipTransferred): void {}
 
 export function handleTransfer(event: Transfer): void {
   let tokenId = event.params.tokenId;
-  let map = MonsterMaps.bind(event.address)
-  let monsterIds = map.getMonsterIds(tokenId)
+  let mapContract = MonsterMaps.bind(event.address)
+  let monsterIds = mapContract.getMonsterIds(tokenId)
+  let from = event.params.from.toHex();
+  let to = event.params.to.toHex();
 
-  
-
-  let all = All.load('all');
-  if (all == null) {
-      all = new All('all');
-      all.numOwners = BigInt.fromI32(0);
-      all.numTokens = BigInt.fromI32(0);
-      all.numTokenContracts = BigInt.fromI32(0);
-  }
-  
-
-
-  let contract = EIP721.bind(event.address);
-  let tokenContract = TokenContract.load(contractId);
-  if(tokenContract == null) {
-      // log.error('contract : {}',[event.address.toHexString()]);
-      let supportsEIP165Identifier = supportsInterface(contract, '01ffc9a7');
-      let supportsEIP721Identifier = supportsInterface(contract, '80ac58cd');
-      let supportsNullIdentifierFalse = supportsInterface(contract, '00000000', false);
-      let supportsEIP721 = supportsEIP165Identifier && supportsEIP721Identifier && supportsNullIdentifierFalse;
-
-      let supportsEIP721Metadata = false;
-      if(supportsEIP721) {
-          supportsEIP721Metadata = supportsInterface(contract, '5b5e139f');
-          // log.error('NEW CONTRACT eip721Metadata for {} : {}', [event.address.toHex(), supportsEIP721Metadata ? 'true' : 'false']);
-      }
-      if (supportsEIP721) {
-          tokenContract = new TokenContract(contractId);
-          tokenContract.doAllAddressesOwnTheirIdByDefault = false;
-          tokenContract.supportsEIP721Metadata = supportsEIP721Metadata;
-          tokenContract.numTokens = BigInt.fromI32(0);
-          tokenContract.numOwners = BigInt.fromI32(0);
-          let name = contract.try_name();
-          if(!name.reverted) {
-              tokenContract.name = normalize(name.value);
-          }
-          let symbol = contract.try_symbol();
-          if(!symbol.reverted) {
-              tokenContract.symbol = normalize(symbol.value);
-          }
-      } else {
-          return;
-      }
-      all.numTokenContracts = all.numTokenContracts.plus(BigInt.fromI32(1));
-
-      let doAllAddressesOwnTheirIdByDefault = contract.try_doAllAddressesOwnTheirIdByDefault();
-      if(!doAllAddressesOwnTheirIdByDefault.reverted) {
-          tokenContract.doAllAddressesOwnTheirIdByDefault = doAllAddressesOwnTheirIdByDefault.value; // only set it at creation
-      } else {
-          tokenContract.doAllAddressesOwnTheirIdByDefault = false;
-      }
-  }
+  // TODO:
+  // - Using logic below, update Monster and Owner Entities, dropping the "PerTokenContract"
+  //   stuff, since we are only looking at the one contract.
+  //   Although, it sure would be fun to be able to have MonsterMaps and Monsters in the same sub-graph
+  //   but this part first.
 
   if (from != zeroAddress || to != zeroAddress) { // skip if from zero to zero
-
-      if (from != zeroAddress) { // existing token
+    if (from != zeroAddress) { // existing token
           let currentOwnerPerTokenContractId = contractId + '_' + from;
           let currentOwnerPerTokenContract = OwnerPerTokenContract.load(currentOwnerPerTokenContractId);
           if (currentOwnerPerTokenContract != null) {

@@ -1,13 +1,13 @@
 type MonsterMap @entity {
   id: ID!
   tokenID: BigInt!,
-  owner: Bytes!,
-  monsters: [Int!]!
+  owner: Owner!,
+  monsters: [Monster!]!
 }
 
 type Owner @entity {
   id: ID!
-  tokens: [MonsterMap!]! @derivedFrom(field: "owner")
+  monsterMaps: [MonsterMap!]! @derivedFrom(field: "owner")
   numTokens: BigInt!
 }
 

@@ -12,7 +12,7 @@ import {
   BigDecimal
 } from "@graphprotocol/graph-ts";
 
-export class ExampleEntity extends Entity {
+export class MonsterMap extends Entity {
   constructor(id: string) {
     super();
     this.set("id", Value.fromString(id));
@@ -20,17 +20,17 @@ export class ExampleEntity extends Entity {
 
   save(): void {
     let id = this.get("id");
-    assert(id !== null, "Cannot save ExampleEntity entity without an ID");
+    assert(id !== null, "Cannot save MonsterMap entity without an ID");
     assert(
       id.kind == ValueKind.STRING,
-      "Cannot save ExampleEntity entity with non-string ID. " +
+      "Cannot save MonsterMap entity with non-string ID. " +
         'Considering using .toHex() to convert the "id" to a string.'
     );
-    store.set("ExampleEntity", id.toString(), this);
+    store.set("MonsterMap", id.toString(), this);
   }
 
-  static load(id: string): ExampleEntity | null {
-    return store.get("ExampleEntity", id) as ExampleEntity | null;
+  static load(id: string): MonsterMap | null {
+    return store.get("MonsterMap", id) as MonsterMap | null;
   }
 
   get id(): string {
@@ -42,30 +42,119 @@ export class ExampleEntity extends Entity {
     this.set("id", Value.fromString(value));
   }
 
-  get count(): BigInt {
-    let value = this.get("count");
+  get tokenID(): BigInt {
+    let value = this.get("tokenID");
     return value.toBigInt();
   }
 
-  set count(value: BigInt) {
-    this.set("count", Value.fromBigInt(value));
+  set tokenID(value: BigInt) {
+    this.set("tokenID", Value.fromBigInt(value));
   }
 
-  get owner(): Bytes {
+  get owner(): string {
     let value = this.get("owner");
-    return value.toBytes();
+    return value.toString();
   }
 
-  set owner(value: Bytes) {
-    this.set("owner", Value.fromBytes(value));
+  set owner(value: string) {
+    this.set("owner", Value.fromString(value));
   }
 
-  get approved(): Bytes {
-    let value = this.get("approved");
-    return value.toBytes();
+  get monsters(): Array<string> {
+    let value = this.get("monsters");
+    return value.toStringArray();
   }
 
-  set approved(value: Bytes) {
-    this.set("approved", Value.fromBytes(value));
+  set monsters(value: Array<string>) {
+    this.set("monsters", Value.fromStringArray(value));
+  }
+}
+
+export class Owner extends Entity {
+  constructor(id: string) {
+    super();
+    this.set("id", Value.fromString(id));
+  }
+
+  save(): void {
+    let id = this.get("id");
+    assert(id !== null, "Cannot save Owner entity without an ID");
+    assert(
+      id.kind == ValueKind.STRING,
+      "Cannot save Owner entity with non-string ID. " +
+        'Considering using .toHex() to convert the "id" to a string.'
+    );
+    store.set("Owner", id.toString(), this);
+  }
+
+  static load(id: string): Owner | null {
+    return store.get("Owner", id) as Owner | null;
+  }
+
+  get id(): string {
+    let value = this.get("id");
+    return value.toString();
+  }
+
+  set id(value: string) {
+    this.set("id", Value.fromString(value));
+  }
+
+  get monsterMaps(): Array<string> {
+    let value = this.get("monsterMaps");
+    return value.toStringArray();
+  }
+
+  set monsterMaps(value: Array<string>) {
+    this.set("monsterMaps", Value.fromStringArray(value));
+  }
+
+  get numTokens(): BigInt {
+    let value = this.get("numTokens");
+    return value.toBigInt();
+  }
+
+  set numTokens(value: BigInt) {
+    this.set("numTokens", Value.fromBigInt(value));
+  }
+}
+
+export class Monster extends Entity {
+  constructor(id: string) {
+    super();
+    this.set("id", Value.fromString(id));
+  }
+
+  save(): void {
+    let id = this.get("id");
+    assert(id !== null, "Cannot save Monster entity without an ID");
+    assert(
+      id.kind == ValueKind.STRING,
+      "Cannot save Monster entity with non-string ID. " +
+        'Considering using .toHex() to convert the "id" to a string.'
+    );
+    store.set("Monster", id.toString(), this);
+  }
+
+  static load(id: string): Monster | null {
+    return store.get("Monster", id) as Monster | null;
+  }
+
+  get id(): string {
+    let value = this.get("id");
+    return value.toString();
+  }
+
+  set id(value: string) {
+    this.set("id", Value.fromString(value));
+  }
+
+  get monsterMaps(): Array<string> {
+    let value = this.get("monsterMaps");
+    return value.toStringArray();
+  }
+
+  set monsterMaps(value: Array<string>) {
+    this.set("monsterMaps", Value.fromStringArray(value));
   }
 }
