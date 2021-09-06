@@ -50,14 +50,12 @@ function saveMapWithOwner(owner: Owner|null, event: Transfer): void {
       map.tokenURI = normalize(metadataURI.value);
     }
   }
-  if (map.monsters.length === 0) {
+  if (!map.monsters || map.monsters.length === 0) {
     let monsterIds = mapContract.getMonsterIds(tokenId);
     for (let i=0; i < monsterIds.length; i++) {
       let mId = monsterIds[i].toString();
       map.monsters.push(mId);
     }
-  } else {
-    map.monsters = [];
   }
   
   map.owner = owner.id;
