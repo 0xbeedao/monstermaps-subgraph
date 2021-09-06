@@ -1,9 +1,6 @@
-import { BigInt } from "@graphprotocol/graph-ts"
+import { store, BigInt, ethereum } from "@graphprotocol/graph-ts"
 import {
   MonsterMaps,
-  Approval,
-  ApprovalForAll,
-  OwnershipTransferred,
   Transfer
 } from "../generated/MonsterMaps/MonsterMaps"
 
@@ -13,166 +10,137 @@ import {
   Monster,
 } from "../generated/schema"
 
-export function handleApproval(event: Approval): void {
-  // Entities can be loaded from the store using a string ID; this ID
-  // needs to be unique across all entities of the same type
-  let entity = ExampleEntity.load(event.transaction.from.toHex())
+const zeroAddress = '0x0000000000000000000000000000000000000000';
 
-  // Entities only exist after they have been saved to the store;
-  // `null` checks allow to create entities on demand
-  if (entity == null) {
-    entity = new ExampleEntity(event.transaction.from.toHex())
-
-    // Entity fields can be set using simple assignments
-    entity.count = BigInt.fromI32(0)
-  }
-
-  // BigInt and BigDecimal math are supported
-  entity.count = entity.count + BigInt.fromI32(1)
-
-  // Entity fields can be set based on event parameters
-  entity.owner = event.params.owner
-  entity.approved = event.params.approved
-
-  // Entities can be written to the store with `.save()`
-  entity.save()
-
-  // Note: If a handler doesn't require existing field values, it is faster
-  // _not_ to load the entity from the store. Instead, create it fresh with
-  // `new Entity(...)`, set the fields that should be updated and save the
-  // entity back to the store. Fields that were not set or unset remain
-  // unchanged, allowing for partial updates to be applied.
-
-  // It is also possible to access smart contracts from mappings. For
-  // example, the contract that has emitted the event can be connected to
-  // with:
-  //
-  // let contract = Contract.bind(event.address)
-  //
-  // The following functions can then be called on this contract to access
-  // state variables and other data:
-  //
-  // - contract.balanceOf(...)
-  // - contract.getApproved(...)
-  // - contract.getMonsterAtWaypoint(...)
-  // - contract.getMonsterIds(...)
-  // - contract.getWaypointCoord(...)
-  // - contract.getWaypointCoords(...)
-  // - contract.getWaypointCount(...)
-  // - contract.isApprovedForAll(...)
-  // - contract.name(...)
-  // - contract.owner(...)
-  // - contract.ownerOf(...)
-  // - contract.supportsInterface(...)
-  // - contract.symbol(...)
-  // - contract.tokenByIndex(...)
-  // - contract.tokenOfOwnerByIndex(...)
-  // - contract.tokenURI(...)
-  // - contract.totalSupply(...)
+function setCharAt(str: string, index: number, char: string): string {
+  if(index > str.length-1) return str;
+  return str.substr(0,index) + char + str.substr(index+1);
 }
 
-export function handleApprovalForAll(event: ApprovalForAll): void {}
+function normalize(strValue: string): string {
+  if (strValue.length === 1 && strValue.charCodeAt(0) === 0) {
+      return "";    
+  } else {
+      for (let i = 0; i < strValue.length; i++) {
+          if (strValue.charCodeAt(i) === 0) {
+              strValue = setCharAt(strValue, i, '\ufffd'); // graph-node db does not support string with '\u0000'
+          }
+      }
+      return strValue;
+  }
+}
 
-export function handleOwnershipTransferred(event: OwnershipTransferred): void {}
+function saveMapWithMonster(monsterMap: MonsterMap, monsterId: string, event: Transfer): Monster {
+  let monster: Monster = Monster.load(monsterId);
+  if (!monster) {
+    monster = new Monster(monsterId);
+    monster.monsterMaps = [];
+  }
+  if (!(monsterMap.id in monster.monsterMaps)) {
+    monster.monsterMaps.push(monsterMap.id);
+  }
+  monster.save()
+  return monster;
+}
 
+function saveMapWithOwner(owner: Owner, event: Transfer): MonsterMap {
+  const {params: {tokenId}} = event;
+  let map: MonsterMap = MonsterMap.load(tokenId.toString());
+  if (map == null) {
+      map = new MonsterMap(tokenId.toString());
+      map.tokenID = tokenId;
+      map.mintTime = event.block.timestamp;
+      map.tokenURI = ""
+      map.monsters = [];
+  }
+  let mapContract: MonsterMaps;
+  if (map.tokenURI === "" || map.monsters.length === 0) {
+    mapContract = MonsterMaps.bind(event.address)
+  }
+  if (map.tokenURI === "") {
+    const metadataURI = mapContract.try_tokenURI(tokenId);
+    if (!metadataURI.reverted) {
+      map.tokenURI = normalize(metadataURI.value);
+    }
+  }
+  if (map.monsters.length === 0) {
+    const monsterCall = mapContract.try_getMonsterIds(tokenId);
+    if (!monsterCall.reverted) {
+      map.monsters = monsterCall.value.map(x => x.toString());
+      map.monsters.map(monsterId => {
+        saveMapWithMonster(map, monsterId, event);
+      });
+    } else {
+      map.monsters = [];
+    }
+  }
+  map.owner = owner.id;
+  map.save();
+  return map;
+}
+
+function handleTransferExisting(event: Transfer): void {
+  // an existing token will already have an Owner and the map will have its tokenURI and monsters
+  const {params: {tokenId, from, to}} = event;
+
+  // so, just remove ownership from current
+  const currentOwner: Owner = Owner.load(from.toHex());
+  if (currentOwner != null) {
+    currentOwner.monsterMapCount = currentOwner.monsterMapCount.minus(BigInt.fromI32(1));
+    currentOwner.save();
+  }
+
+  // add ownership to new
+  let newOwner: Owner = Owner.load(to.toHex());
+  if (newOwner == null) { // create it if missing
+      newOwner = new Owner(to.toHex());
+      newOwner.monsterMapCount = BigInt.fromI32(0);
+  }
+  newOwner.monsterMapCount = newOwner.monsterMapCount.plus(BigInt.fromI32(1));
+  newOwner.save();
+
+  // Should already have a map, but do it this way for safety
+  saveMapWithOwner(newOwner, event);
+}
+
+function handleMint(event: Transfer): void {
+  const {
+    address,
+    params: {tokenId, from, to}
+  } = event;
+
+  let newOwner = Owner.load(to.toHex());
+  if (newOwner == null) {
+      newOwner = new Owner(to.toHex());
+      newOwner.monsterMapCount = BigInt.fromI32(0);
+  }
+  newOwner.monsterMapCount = newOwner.monsterMapCount.plus(BigInt.fromI32(1));
+  newOwner.save();
+
+  saveMapWithOwner(newOwner, event);
+}
+
+function handleBurn(event: Transfer): void {
+  const {params: {tokenId, from}} = event;
+  const burnOwner = Owner.load(from.toHex());
+  if (burnOwner) {
+    burnOwner.monsterMapCount = burnOwner.monsterMapCount.minus(BigInt.fromI32(1));
+  }
+  store.remove('MonsterMap', tokenId.toString());
+}
+ 
 export function handleTransfer(event: Transfer): void {
-  let tokenId = event.params.tokenId;
-  let mapContract = MonsterMaps.bind(event.address)
-  let monsterIds = mapContract.getMonsterIds(tokenId)
+  const {params: {tokenId}} = event;
   let from = event.params.from.toHex();
   let to = event.params.to.toHex();
 
-  // TODO:
-  // - Using logic below, update Monster and Owner Entities, dropping the "PerTokenContract"
-  //   stuff, since we are only looking at the one contract.
-  //   Although, it sure would be fun to be able to have MonsterMaps and Monsters in the same sub-graph
-  //   but this part first.
-
   if (from != zeroAddress || to != zeroAddress) { // skip if from zero to zero
     if (from != zeroAddress) { // existing token
-          let currentOwnerPerTokenContractId = contractId + '_' + from;
-          let currentOwnerPerTokenContract = OwnerPerTokenContract.load(currentOwnerPerTokenContractId);
-          if (currentOwnerPerTokenContract != null) {
-              if (currentOwnerPerTokenContract.numTokens.equals(BigInt.fromI32(1))) {
-                  tokenContract.numOwners = tokenContract.numOwners.minus(BigInt.fromI32(1));
-              }
-              currentOwnerPerTokenContract.numTokens = currentOwnerPerTokenContract.numTokens.minus(BigInt.fromI32(1));
-              currentOwnerPerTokenContract.save();
-          }
-
-          let currentOwner = Owner.load(from);
-          if (currentOwner != null) {
-              if (currentOwner.numTokens.equals(BigInt.fromI32(1))) {
-                  all.numOwners = all.numOwners.minus(BigInt.fromI32(1));
-              }
-              currentOwner.numTokens = currentOwner.numTokens.minus(BigInt.fromI32(1));
-              currentOwner.save();
-          }
-      } // else minting
-      
-      
-      if(to != zeroAddress) { // transfer
-          let newOwner = Owner.load(to);
-          if (newOwner == null) {
-              newOwner = new Owner(to);
-              newOwner.numTokens = BigInt.fromI32(0);
-          }
-
-          let eip721Token = Token.load(id);
-          if(eip721Token == null) {
-              eip721Token = new Token(id);
-              eip721Token.contract = tokenContract.id;
-              eip721Token.tokenID = tokenId;
-              eip721Token.mintTime = event.block.timestamp;
-              if (tokenContract.supportsEIP721Metadata) {
-                  let metadataURI = contract.try_tokenURI(tokenId);
-                  if(!metadataURI.reverted) {
-                      eip721Token.tokenURI = normalize(metadataURI.value);
-                  } else {
-                      eip721Token.tokenURI = "";
-                  }
-              } else {
-                  // log.error('tokenURI not supported {}', [tokenContract.id]);
-                  eip721Token.tokenURI = ""; // TODO null ?
-              }
-          }
-          
-          if (from == zeroAddress) { // mint +1
-              all.numTokens = all.numTokens.plus(BigInt.fromI32(1));
-          }
-          
-          eip721Token.owner = newOwner.id;
-          eip721Token.save();
-
-          if (newOwner.numTokens.equals(BigInt.fromI32(0))) {
-              all.numOwners = all.numOwners.plus(BigInt.fromI32(1));
-          }
-          newOwner.numTokens = newOwner.numTokens.plus(BigInt.fromI32(1));
-          newOwner.save();
-
-          let newOwnerPerTokenContractId = contractId + '_' + to;
-          let newOwnerPerTokenContract = OwnerPerTokenContract.load(newOwnerPerTokenContractId);
-          if (newOwnerPerTokenContract == null) {
-              newOwnerPerTokenContract = new OwnerPerTokenContract(newOwnerPerTokenContractId);
-              newOwnerPerTokenContract.owner = newOwner.id;
-              newOwnerPerTokenContract.contract = tokenContract.id;
-              newOwnerPerTokenContract.numTokens = BigInt.fromI32(0);
-          }
-
-          if (newOwnerPerTokenContract.numTokens.equals(BigInt.fromI32(0))) {
-              tokenContract.numOwners = tokenContract.numOwners.plus(BigInt.fromI32(1));
-          }
-          newOwnerPerTokenContract.numTokens = newOwnerPerTokenContract.numTokens.plus(BigInt.fromI32(1));
-          newOwnerPerTokenContract.save();
-
-          tokenContract.numTokens = tokenContract.numTokens.plus(BigInt.fromI32(1));
-      } else { // burn
-          store.remove('Token', id);
-          all.numTokens = all.numTokens.minus(BigInt.fromI32(1));
-          tokenContract.numTokens = tokenContract.numTokens.minus(BigInt.fromI32(1));
-      }
+      handleTransferExisting(event);
+    } else if (to != zeroAddress) {
+      handleMint(event);
+    } else { // burn
+      handleBurn(event);
+    }
   }
-  tokenContract.save();
-  all.save();
-}
 }

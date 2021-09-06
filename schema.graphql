@@ -2,13 +2,15 @@ type MonsterMap @entity {
   id: ID!
   tokenID: BigInt!,
   owner: Owner!,
-  monsters: [Monster!]!
+  monsters: [Monster!]!,
+  mintTime: BigInt!,
+  tokenURI: String!
 }
 
 type Owner @entity {
   id: ID!
   monsterMaps: [MonsterMap!]! @derivedFrom(field: "owner")
-  numTokens: BigInt!
+  monsterMapCount: BigInt!
 }
 
 type Monster @entity {

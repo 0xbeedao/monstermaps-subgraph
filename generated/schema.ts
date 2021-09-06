@@ -68,6 +68,24 @@ export class MonsterMap extends Entity {
   set monsters(value: Array<string>) {
     this.set("monsters", Value.fromStringArray(value));
   }
+
+  get mintTime(): BigInt {
+    let value = this.get("mintTime");
+    return value.toBigInt();
+  }
+
+  set mintTime(value: BigInt) {
+    this.set("mintTime", Value.fromBigInt(value));
+  }
+
+  get tokenURI(): string {
+    let value = this.get("tokenURI");
+    return value.toString();
+  }
+
+  set tokenURI(value: string) {
+    this.set("tokenURI", Value.fromString(value));
+  }
 }
 
 export class Owner extends Entity {
@@ -109,13 +127,13 @@ export class Owner extends Entity {
     this.set("monsterMaps", Value.fromStringArray(value));
   }
 
-  get numTokens(): BigInt {
-    let value = this.get("numTokens");
+  get monsterMapCount(): BigInt {
+    let value = this.get("monsterMapCount");
     return value.toBigInt();
   }
 
-  set numTokens(value: BigInt) {
-    this.set("numTokens", Value.fromBigInt(value));
+  set monsterMapCount(value: BigInt) {
+    this.set("monsterMapCount", Value.fromBigInt(value));
   }
 }
 
