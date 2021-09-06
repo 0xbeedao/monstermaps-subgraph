@@ -38,7 +38,6 @@ function saveMapWithOwner(owner: Owner|null, event: Transfer): void {
       map.tokenID = tokenId;
       map.mintTime = event.block.timestamp;
       map.tokenURI = ""
-      map.monsters = [];
   }
   let mapContract: MonsterMaps;
   if (map.tokenURI === "" || map.monsters.length === 0) {
@@ -50,14 +49,14 @@ function saveMapWithOwner(owner: Owner|null, event: Transfer): void {
       map.tokenURI = normalize(metadataURI.value);
     }
   }
-  if (!map.monsters || map.monsters.length === 0) {
-    let monsterIds = mapContract.getMonsterIds(tokenId);
-    for (let i=0; i < monsterIds.length; i++) {
-      let mId = monsterIds[i].toString();
-      map.monsters.push(mId);
-    }
+
+  let monsters: string[] = [];
+  let monsterIds = mapContract.getMonsterIds(tokenId);
+  for (let i=0; i < monsterIds.length; i++) {
+    let mId = monsterIds[i].toString();
+    monsters.push(mId);
   }
-  
+  map.monsters = monsters;
   map.owner = owner.id;
   map.save();
 }
