@@ -12,7 +12,7 @@ import {
 
 const zeroAddress = '0x0000000000000000000000000000000000000000';
 
-function setCharAt(str: string, index: number, char: string): string {
+function setCharAt(str: string, index: i32, char: string): string {
   if(index > str.length-1) return str;
   return str.substr(0,index) + char + str.substr(index+1);
 }
@@ -30,22 +30,32 @@ function normalize(strValue: string): string {
   }
 }
 
-function saveMapWithMonster(monsterMap: MonsterMap, monsterId: string, event: Transfer): Monster {
-  let monster: Monster = Monster.load(monsterId);
+function saveMapWithMonster(monsterMap: MonsterMap|null, monsterId: string): void {
+  let monster = Monster.load(monsterId);
+  let maps: string[] = [];
   if (!monster) {
     monster = new Monster(monsterId);
-    monster.monsterMaps = [];
+  } else {
+    maps = monster.monsterMaps;
   }
-  if (!(monsterMap.id in monster.monsterMaps)) {
-    monster.monsterMaps.push(monsterMap.id);
+  let found = false;
+  for (let i=0; i < maps.length; i++) {
+    let currentId = maps[i]; 
+    if (currentId === monsterId) {
+      found = true;
+      break;
+    }
   }
+  if (!found) {
+    maps.push(monsterMap.id);
+  }
+  monster.monsterMaps = maps;
   monster.save()
-  return monster;
 }
 
-function saveMapWithOwner(owner: Owner, event: Transfer): MonsterMap {
-  const {params: {tokenId}} = event;
-  let map: MonsterMap = MonsterMap.load(tokenId.toString());
+function saveMapWithOwner(owner: Owner|null, event: Transfer): void {
+  let tokenId = event.params.tokenId;
+  let map = MonsterMap.load(tokenId.toString());
   if (map == null) {
       map = new MonsterMap(tokenId.toString());
       map.tokenID = tokenId;
@@ -58,40 +68,42 @@ function saveMapWithOwner(owner: Owner, event: Transfer): MonsterMap {
     mapContract = MonsterMaps.bind(event.address)
   }
   if (map.tokenURI === "") {
-    const metadataURI = mapContract.try_tokenURI(tokenId);
+    let metadataURI = mapContract.try_tokenURI(tokenId);
     if (!metadataURI.reverted) {
       map.tokenURI = normalize(metadataURI.value);
     }
   }
   if (map.monsters.length === 0) {
-    const monsterCall = mapContract.try_getMonsterIds(tokenId);
-    if (!monsterCall.reverted) {
-      map.monsters = monsterCall.value.map(x => x.toString());
-      map.monsters.map(monsterId => {
-        saveMapWithMonster(map, monsterId, event);
-      });
-    } else {
-      map.monsters = [];
+    let monsterIds = mapContract.getMonsterIds(tokenId);
+    for (let i=0; i < monsterIds.length; i++) {
+      let mId = monsterIds[i].toString();
+      map.monsters.push(mId);
+      
+      saveMapWithMonster(map, mId);
     }
+  } else {
+    map.monsters = [];
   }
+  
   map.owner = owner.id;
   map.save();
-  return map;
 }
 
 function handleTransferExisting(event: Transfer): void {
   // an existing token will already have an Owner and the map will have its tokenURI and monsters
-  const {params: {tokenId, from, to}} = event;
+  let tokenId = event.params.tokenId;
+  let from = event.params.from;
+  let to = event.params.to;
 
   // so, just remove ownership from current
-  const currentOwner: Owner = Owner.load(from.toHex());
+  let currentOwner = Owner.load(from.toHex());
   if (currentOwner != null) {
     currentOwner.monsterMapCount = currentOwner.monsterMapCount.minus(BigInt.fromI32(1));
     currentOwner.save();
   }
 
   // add ownership to new
-  let newOwner: Owner = Owner.load(to.toHex());
+  let newOwner = Owner.load(to.toHex());
   if (newOwner == null) { // create it if missing
       newOwner = new Owner(to.toHex());
       newOwner.monsterMapCount = BigInt.fromI32(0);
@@ -104,10 +116,11 @@ function handleTransferExisting(event: Transfer): void {
 }
 
 function handleMint(event: Transfer): void {
-  const {
-    address,
-    params: {tokenId, from, to}
-  } = event;
+  let address = event.address;
+  let tokenId = event.params.tokenId;
+  let from = event.params.from;
+  let to = event.params.to;
+
 
   let newOwner = Owner.load(to.toHex());
   if (newOwner == null) {
@@ -121,8 +134,10 @@ function handleMint(event: Transfer): void {
 }
 
 function handleBurn(event: Transfer): void {
-  const {params: {tokenId, from}} = event;
-  const burnOwner = Owner.load(from.toHex());
+  let tokenId = event.params.tokenId;
+  let from = event.params.from;
+
+  let burnOwner = Owner.load(from.toHex());
   if (burnOwner) {
     burnOwner.monsterMapCount = burnOwner.monsterMapCount.minus(BigInt.fromI32(1));
   }
@@ -130,7 +145,7 @@ function handleBurn(event: Transfer): void {
 }
  
 export function handleTransfer(event: Transfer): void {
-  const {params: {tokenId}} = event;
+  let tokenId = event.params.tokenId;
   let from = event.params.from.toHex();
   let to = event.params.to.toHex();
 

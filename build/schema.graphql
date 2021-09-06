@@ -1,6 +1,19 @@
-type ExampleEntity @entity {
+type MonsterMap @entity {
   id: ID!
-  count: BigInt!
-  owner: Bytes! # address
-  approved: Bytes! # address
+  tokenID: BigInt!,
+  owner: Owner!,
+  monsters: [Monster!]!,
+  mintTime: BigInt!,
+  tokenURI: String!
+}
+
+type Owner @entity {
+  id: ID!
+  monsterMaps: [MonsterMap!]! @derivedFrom(field: "owner")
+  monsterMapCount: BigInt!
+}
+
+type Monster @entity {
+  id: ID!
+  monsterMaps: [MonsterMap!]! @derivedFrom(field: "monsters")
 }
