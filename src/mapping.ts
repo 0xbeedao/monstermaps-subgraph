@@ -30,7 +30,7 @@ function normalize(strValue: string): string {
   }
 }
 
-function saveMapWithMonster(mapId: string, monsterId: string): void {
+/* function getMonsterForMap(mapId: BigInt, monsterId: string): Monster {
   let monster = Monster.load(monsterId);
   let maps: string[] = [];
   if (!monster) {
@@ -47,10 +47,20 @@ function saveMapWithMonster(mapId: string, monsterId: string): void {
     }
   }
   if (!found) {
-    maps.push(mapId);
+    maps.push(mapId.toString());
   }
   monster.monsterMaps = maps;
   monster.save()
+  return monster;
+} */
+
+function ensureMonster(id: BigInt): void {
+  let key: string = id.toString();
+  let monster = Monster.load(key);
+  if (!monster) {
+    monster = new Monster(key);
+    monster.save();
+  }
 }
 
 function saveMapWithOwner(owner: Owner|null, event: Transfer): void {
@@ -63,22 +73,24 @@ function saveMapWithOwner(owner: Owner|null, event: Transfer): void {
       map.tokenURI = ""
   }
   let mapContract: MonsterMaps;
-  if (map.tokenURI === "" || map.monsters.length === 0) {
+  let monsters = map.monsters;
+  if (map.tokenURI == "" || monsters.length == 0) {
     mapContract = MonsterMaps.bind(event.address)
-  }
-  if (map.tokenURI === "") {
-    let metadataURI = mapContract.try_tokenURI(tokenId);
-    if (!metadataURI.reverted) {
-      map.tokenURI = normalize(metadataURI.value);
+  
+    if (map.tokenURI == "") {
+      let metadataURI = mapContract.try_tokenURI(tokenId);
+      if (!metadataURI.reverted) {
+        map.tokenURI = normalize(metadataURI.value);
+      }
     }
-  }
 
-  let monsters: string[] = [];
-  let monsterIds = mapContract.getMonsterIds(tokenId);
-  for (let i=0; i < monsterIds.length; i++) {
-    let mId = monsterIds[i].toString();
-    monsters.push(mId);
-    saveMapWithMonster(tokenId.toString(), mId);
+    if (monsters.length == 0) {
+      let monsterIds = mapContract.getMonsterIds(tokenId);
+      for (let i=0; i < monsterIds.length; i++) {
+        ensureMonster(monsterIds[i]);
+        monsters.push(monsterIds[i].toString());
+      }
+    }
   }
   map.monsters = monsters;
   map.owner = owner.id;
