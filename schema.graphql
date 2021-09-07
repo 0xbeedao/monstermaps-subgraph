@@ -15,5 +15,6 @@ type Owner @entity {
 
 type Monster @entity {
   id: ID!
-  monsterMaps: [MonsterMap!]! @derivedFrom(field: "monsters")
+  tokenID: BigInt!
+  monsterMaps: [MonsterMap!]!
 }

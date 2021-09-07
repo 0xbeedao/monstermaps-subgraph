@@ -30,6 +30,29 @@ function normalize(strValue: string): string {
   }
 }
 
+function saveMapWithMonster(mapId: string, monsterId: string): void {
+  let monster = Monster.load(monsterId);
+  let maps: string[] = [];
+  if (!monster) {
+    monster = new Monster(monsterId);
+  } else {
+    maps = monster.monsterMaps;
+  }
+  let found = false;
+  for (let i=0; i < maps.length; i++) {
+    let currentId = maps[i]; 
+    if (currentId === monsterId) {
+      found = true;
+      break;
+    }
+  }
+  if (!found) {
+    maps.push(mapId);
+  }
+  monster.monsterMaps = maps;
+  monster.save()
+}
+
 function saveMapWithOwner(owner: Owner|null, event: Transfer): void {
   let tokenId = event.params.tokenId;
   let map = MonsterMap.load(tokenId.toString());
@@ -55,6 +78,7 @@ function saveMapWithOwner(owner: Owner|null, event: Transfer): void {
   for (let i=0; i < monsterIds.length; i++) {
     let mId = monsterIds[i].toString();
     monsters.push(mId);
+    saveMapWithMonster(tokenId.toString(), mId);
   }
   map.monsters = monsters;
   map.owner = owner.id;
